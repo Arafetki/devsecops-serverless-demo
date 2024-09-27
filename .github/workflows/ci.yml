@@ -1,0 +1,114 @@
+name: "CI"
+on:
+  push:
+    branches:
+      - "main"
+      - "release/*"
+      - "develop"
+  workflow_dispatch: {}
+  pull_request: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+jobs:
+  sam_build:
+    name: SAM Build
+    runs-on: ubuntu-latest 
+    steps:
+      - name: Setup AWS SAM
+        run: echo "Setup AWS SAM"
+      - name: Setup runtime
+        run: echo "Setup runtime..."
+      - name: build
+        run: echo "sam build ..."
+      - name: Cache
+        run: echo "Caching..."
+  unit_test:
+    name: Unit testing
+    runs-on: ubuntu-latest
+    needs: [sam_build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve Cached data
+        run : echo "Download Cache..."
+      - name: Setup runtime
+        run: echo "Setup runtime..."        
+      - name: unit_tests
+        run: echo "running unit tests..."
+  integration_test:
+    name: Integration testing
+    runs-on: ubuntu-latest
+    needs: [unit_test]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve Cached data
+        run : echo "Download Cache..."
+      - name: Setup runtime
+        run: echo "Setup runtime..."        
+      - name: unit_tests
+        run: echo "running unit tests..."
+  secrets_scan:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    needs: [integration_test]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        run: echo "Running Gitleaks"
+  semgrep:
+    name: semgrep Code + Supply Chain
+    runs-on: ubuntu-20.04
+    needs: [secrets_scan]
+    env:
+      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+    container:
+      image: semgrep/semgrep
+      credentials:
+        username: ${{ vars.DOCKER_LOGIN }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    if: (github.actor != 'dependabot[bot]')
+    steps:
+      - uses: actions/checkout@v4
+      - run: semgrep ci
+      - run: echo "Uploading Report to S3..."
+  sam_package:
+    name: SAM Package
+    runs-on: ubuntu-latest 
+    if: github.event_name != 'pull_request'
+    needs: [secrets_scan]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve Cached data
+        run : echo "Download Cache..."
+      - name: Setup AWS SAM
+        run: echo "Setup AWS SAM"        
+      - name: Package
+        run: echo "sam package"
+  manual_approval:
+    name: Manual Approval
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Approve
+        run: echo "Approve/Deny"
+  deploy:
+    name: SAM Deploy
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    needs: [manual_approval]
+    steps:
+      - name: Assume IAM role
+        run: echo "Assuming IAM Role..."
+      - name: Setup AWS SAM
+        run: echo "Setup AWS SAM"
+      - name: deploy
+        run: echo "sam deploy --no-fail-on-empty-changeset"
