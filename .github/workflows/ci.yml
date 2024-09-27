@@ -96,7 +96,7 @@ jobs:
   manual_approval:
     name: Manual Approval
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [sam_package]
     steps:
       - name: Approve
         run: echo "Approve/Deny"
