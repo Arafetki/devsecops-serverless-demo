@@ -52,7 +52,7 @@ jobs:
   integration_test:
     name: Integration testing
     runs-on: ubuntu-latest
-    needs: [unit_test]
+    needs: [db_migrate]
     steps:
       - uses: actions/checkout@v4
       - name: Retrieve Cached data
